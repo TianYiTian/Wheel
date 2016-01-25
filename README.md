@@ -1,2 +1,2 @@
-# Wheel
-Just a wheel
+# AndroidWheel
+Just a wheelview for android
