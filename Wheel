@@ -1,0 +1,232 @@
+import android.animation.Animator
+import android.animation.ValueAnimator
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.util.AttributeSet
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.View
+import java.util.*
+
+
+/**
+ * Created by TYT on 2016/1/20.
+ */
+class Wheel : View,View.OnTouchListener{
+    lateinit private var mContext:Context
+    private var number:Int = 3
+    private var degree:Float = 0f
+    private var mPaint:Paint= Paint()
+    private var radius:Int=0
+    lateinit private var mGestureListener : GestureDetector
+    lateinit private var linePointList: ArrayList<Point>
+    private var scrollCount:Int=0
+    public  var speed:Float=1f
+    private var isScrolling:Boolean=false
+    private var seleted:Int=1
+    private var canvasWidth:Int =0
+    private var canvasHeight:Int=0
+    private var mOnRotateListener:OnRotateListener ? = null
+
+
+
+    constructor(context: Context):super(context){
+        initView(context,null)
+    }
+    constructor(context: Context,attributes: AttributeSet):super(context,attributes){
+        initView(context,attributes)
+    }
+
+    private fun initView(context: Context,attributes: AttributeSet?){
+        mContext = context
+
+        this.setOnTouchListener(this)
+    }
+
+
+    override fun onTouch(v: View?, event: MotionEvent?): Boolean {
+        if(event!!.getPointerCount()==1){
+            //Log.w("test",""+"action ${event.action}")
+            //Log.w("test","historysize ${event.historySize}")
+            if(event.action==MotionEvent.ACTION_UP){
+                if(isScrolling){
+                    //doNothing
+                    //Log.w("test","scrollup")
+                }else
+                {
+                    val point:Point = Point(event.x,event.y)
+                    val divideDegree : Float=360f/number
+                    var result:Float=0f
+                    if(Math.abs(360-(getMinDistance(point)-1)*divideDegree-degree)>180f){
+                        result= -(getMinDistance(point)-1)*divideDegree
+                    }else{
+                        result = 360-(getMinDistance(point)-1)*divideDegree
+                    }
+                    val animator:ValueAnimator = ValueAnimator.ofFloat(degree,result)
+                    var start:Int=0
+                    var end:Int=0
+                    var fromDegree:Float=degree
+                    var toDegree:Float=result
+                    animator.addListener(object : Animator.AnimatorListener{
+                        override fun onAnimationCancel(animation: Animator?) {
+
+                        }
+
+                        override fun onAnimationEnd(animation: Animator?) {
+                            end=seleted
+                            if(mOnRotateListener!=null){
+                                mOnRotateListener?.onChoose(fromDegree,toDegree,start,end)
+                            }
+                        }
+
+                        override fun onAnimationRepeat(animation: Animator?) {
+
+                        }
+
+                        override fun onAnimationStart(animation: Animator?) {
+                            start=seleted
+                        }
+                    })
+                    //Log.w("test","from $degree to ${(360-(getMinDistance(point)-1)*divideDegree)}")
+                    animator.addUpdateListener { listener ->
+                        degree=listener.animatedValue as Float
+                        this@Wheel.invalidate()
+                    }
+                    animator.setDuration(500L)
+                    animator.start()
+                    //跳到点击的部分/动画
+                    //Log.w("test","tap")
+                }
+                isScrolling=false
+                return true
+            }
+            if(event.historySize>0){
+                //Log.w("test","bx ${event.x} by ${event.y} ax ${event.getHistoricalX(0)} ay ${event.getHistoricalY(0)}")
+                val result:Float= (event.getHistoricalX(0)-canvasWidth/2)*(event.y-event.getHistoricalY(0))-(event.getHistoricalY(0)-canvasHeight/2)*(event.x-event.getHistoricalX(0))
+                //Log.w("test",result.toString())
+                if(Math.abs(result)>200) {
+                    isScrolling=true
+                    if (result > 0) {
+                        degree += speed
+                    } else {
+                        degree -= speed
+                    }
+                    //Log.w("test","degree $degree")
+                    this@Wheel.invalidate()
+                }
+            }
+        }
+        return true
+    }
+
+
+    override fun onDraw(canvas: Canvas?) {
+        if(degree>=360.0){
+            degree-=360
+        }
+        if(degree<0){
+            degree+=360
+        }
+        //Log.w("test","degree $degree")
+        linePointList = ArrayList<Point>(number)
+        mPaint.textSize=30f
+        mPaint.color= Color.parseColor("#555555")
+        mPaint.isAntiAlias=true
+        mPaint.style=Paint.Style.STROKE
+        radius = when(canvas!!.height<canvas.width){
+            true -> canvas.height/2
+            else ->canvas.width/2
+        }
+        canvasWidth=radius*2
+        canvasHeight=radius*2
+        canvas.drawCircle(canvasWidth/2f,canvasHeight/2f,radius.toFloat(),mPaint)
+        val divideDegree : Float=360f/number
+        val center:Point = Point(canvasWidth/2.toFloat(),canvasHeight/2.toFloat())
+        for(i in 0..number-1){
+            linePointList.add(Point((radius+radius*Math.sin(Math.toRadians((i-0.5)*divideDegree.toDouble()+degree))).toFloat(),(radius-radius*Math.cos(Math.toRadians((i-0.5)*divideDegree.toDouble()+degree))).toFloat()))
+            drawDivider((i-0.5)*divideDegree.toDouble()+degree,canvas)
+        }
+        for(i in 1..number){
+            if(i==number){
+                val lineCenter: Point = Point((linePointList[0].x + linePointList[i - 1].x) / 2, (linePointList[0].y + linePointList[i - 1].y) / 2)
+                val drawPoint: Point = Point((lineCenter.x + center.x) / 2, (lineCenter.y + center.y) / 2)
+                canvas.drawText("$i", drawPoint.x, drawPoint.y, mPaint)
+            }else {
+                val lineCenter: Point = Point((linePointList[i].x + linePointList[i - 1].x) / 2, (linePointList[i].y + linePointList[i - 1].y) / 2)
+                val drawPoint: Point = Point((lineCenter.x + center.x) / 2, (lineCenter.y + center.y) / 2)
+                canvas.drawText("$i", drawPoint.x, drawPoint.y, mPaint)
+            }
+        }
+        mPaint.style=Paint.Style.FILL
+        //canvas.drawArc(rect,270f-divideDegree/2,divideDegree,true,mPaint)
+        drawSelected(canvas)
+        canvas.drawLine(canvasWidth/2f,canvasHeight/7f,canvasWidth/2f,0f,mPaint)
+    }
+
+    private fun drawDivider(degree: Double,canvas: Canvas?){
+        canvas!!.drawLine(canvasWidth/2f,canvasHeight/2f,(radius+radius*Math.sin(Math.toRadians(degree))).toFloat(),(radius-radius*Math.cos(Math.toRadians(degree))).toFloat(),mPaint)
+    }
+
+    private data class Point(var x:Float , var y:Float)
+    private fun getMinDistance(point:Point):Int{
+        val distanceList:FloatArray = FloatArray(number)
+        for (i in distanceList.indices){
+            if(i!=distanceList.size-1){
+                distanceList[i] = getDistance(linePointList[i],point)+getDistance(linePointList[i+1], point)
+            }else{
+                distanceList[i] = getDistance(linePointList[i], point)+getDistance(linePointList[0], point)
+            }
+        }
+        var minDistance:Float = distanceList[0]
+        var min:Int=1
+        for(i in distanceList.indices){
+            if(distanceList[i]<=minDistance){
+                minDistance=distanceList[i]
+                min=i+1
+            }
+        }
+        return min
+    }
+    private fun drawSelected(canvas:Canvas?){
+        val nowselected:Int = getMinDistance(Point(canvasWidth/2f,0f))
+        if(seleted!=nowselected){
+            if(mOnRotateListener!=null){
+                mOnRotateListener?.onChange(seleted,nowselected)
+            }
+        }
+        seleted=nowselected
+        //Log.w("selected","$seleted")
+        val rect:RectF = RectF(0f,0f,canvas!!.width.toFloat(),canvasHeight.toFloat())
+        val divideDegree : Float=360f/number
+        val paint:Paint= Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.alpha=100
+        paint.style=Paint.Style.FILL
+        if (seleted==1){
+            canvas!!.drawArc(rect,270f-divideDegree/2+degree,divideDegree,true,paint)
+        }else{
+            canvas!!.drawArc(rect,270f+degree-(number-seleted+1.5f)*divideDegree,divideDegree,true,paint)
+        }
+
+    }
+    private fun getDistance(point1:Point,point2:Point):Float{
+        return (Math.sqrt(Math.pow((point1.x.toDouble()-point2.x),2.0)+Math.pow((point1.y.toDouble()-point2.y),2.0))).toFloat()
+    }
+    public interface OnRotateListener{
+        fun onChoose(fromDegree:Float,toDegree:Float,start:Int,end:Int)
+        fun onChange(from:Int,to:Int)
+    }
+    public fun setOnRotateListener(listener:OnRotateListener?){
+        mOnRotateListener=listener
+    }
+    public fun setNumber(num:Int){
+        number=num
+        seleted=1
+        degree=0f
+        this@Wheel.invalidate()
+    }
+    public fun getSelected():Int{
+        return seleted
+    }
